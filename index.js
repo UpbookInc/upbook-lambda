@@ -18,13 +18,14 @@ exports.handler = (event, context, callback) => {
         },
     });
     
-    function sendTextMessages(phoneNumbersToMessage, base64Profile) {
+    function sendTextMessages(name, phoneNumbersToMessage, base64Profile) {
         console.log("Phone numbers to message: " + phoneNumbersToMessage);
         
         for (var phoneNumIndex = 0; phoneNumIndex < phoneNumbersToMessage.length; phoneNumIndex++) {
             console.log("Sending text to: " + phoneNumbersToMessage[phoneNumIndex]);
+            var updateMessage = ' sent you contact updates via UpBook! ';
             var textParams = {
-                Message: 'Please join my UpBook network! ' + baseUrl + base64Profile,
+                Message: name + updateMessage + baseUrl + base64Profile,
                 PhoneNumber: phoneNumbersToMessage[phoneNumIndex],
             };
             console.log(textParams);
@@ -49,8 +50,8 @@ exports.handler = (event, context, callback) => {
             break;
         case 'GET':
             //Note: this api is just for testing
-            var phoneNumbers = ['19417163554', '14074317596'];
-            sendTextMessages(phoneNumbers);
+            // var phoneNumbers = ['19417163554', '14074317596'];
+            // sendTextMessages(phoneNumbers);
             done();
             break;
         case 'POST':
@@ -61,6 +62,8 @@ exports.handler = (event, context, callback) => {
             var profileFromRequest = jsonBody.profile;
             console.log(profileFromRequest);
             
+            var name = profileFromRequest.name.formatted;
+            
             var ubNetworkToMessage = jsonBody.networkNumbers;
             console.log(ubNetworkToMessage);
             
@@ -68,7 +71,7 @@ exports.handler = (event, context, callback) => {
             var base64Profile = Buffer.from(profileStringify).toString('base64');
             console.log(base64Profile);
             
-            sendTextMessages(ubNetworkToMessage, base64Profile);
+            sendTextMessages(name, ubNetworkToMessage, base64Profile);
             
             if (jsonBody && jsonBody.phoneNumbers && jsonBody.phoneNumbers != '' && jsonBody.phoneNumbers.length > 0) {
                 //sendTextMessages(jsonBody.phoneNumbers);
