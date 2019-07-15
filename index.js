@@ -4,23 +4,33 @@ console.log('Loading function');
 var AWS = require('aws-sdk');
 // Set region
 AWS.config.update({region: 'us-east-1'});
+const uuidv1 = require('uuid/v1');
+const redis = require('redis');
 
-exports.handler = (event, context, callback) => {
-    //console.log('Received event:', JSON.stringify(event, null, 2));
-    
+exports.handler = (event, context, callback) => {   
     const baseUrl = "https://fractalstack.com/upbook/intent?updates=";
 
-    const done = (err, res) => callback(null, {
+    const done = (res, err) => callback(null, {
         statusCode: err ? '400' : '200',
         body: err ? err.message : JSON.stringify(res),
         headers: {
             'Content-Type': 'application/json',
         },
     });
+
+    const redis_client = redis.createClient({
+        host: 'upbook-redis-1.yjt0dp.0001.use1.cache.amazonaws.com',
+        port: 6379
+    });
     
     function sendTextMessages(name, phoneNumbersToMessage, base64Profile) {
         console.log("Phone numbers to message: " + phoneNumbersToMessage);
         
+        var uuid = uuidv1();
+        console.log("storing with key: " + uuid);
+        redis_client.set(uuid, base64Profile, 'EX', 86400); // expires in one day 
+        redis_client.quit(); //required for this to work!
+               
         for (var phoneNumIndex = 0; phoneNumIndex < phoneNumbersToMessage.length; phoneNumIndex++) {
             console.log("Sending text to: " + phoneNumbersToMessage[phoneNumIndex]);
             var updateMessage = ' sent you contact updates via UpBook! ';
@@ -44,15 +54,38 @@ exports.handler = (event, context, callback) => {
         }
     }
 
+    function getProfileDataFromCache(dataUuid, profileDataCallback) {       
+        redis_client.on("error", function (err) {
+            console.log("Redis error " + err);
+        });
+        
+        redis_client.get(dataUuid, function(error, reply) {
+            console.log("redis get: " + reply);
+            if (!error) {
+                console.log("profileDataCallback with reply");
+                redis_client.quit(); //required for this to work!
+                profileDataCallback(reply);
+            } else {
+                done('Redis request errored.');
+            }
+            
+        });
+    }
+
     switch (event.httpMethod) {
-        case 'DELETE':
-            //dynamo.deleteItem(JSON.parse(event.body), done);
-            break;
         case 'GET':
-            //Note: this api is just for testing
-            // var phoneNumbers = ['19417163554', '14074317596'];
-            // sendTextMessages(phoneNumbers);
-            done();
+            console.log('Received GET request');
+            var dataUuid = event["queryStringParameters"]['dataId'];
+            console.log("dataId: " + dataUuid);
+            if (dataUuid) {
+                getProfileDataFromCache(dataUuid, function(resp) {
+                    console.log("call done");
+                    done({data: resp});
+                });
+            } else {
+                done();
+            }
+            
             break;
         case 'POST':
             console.log('Received post:', JSON.stringify(event, null, 2));
@@ -62,7 +95,10 @@ exports.handler = (event, context, callback) => {
             var profileFromRequest = jsonBody.profile;
             console.log(profileFromRequest);
             
-            var name = profileFromRequest.name.formatted;
+            var name = profileFromRequest.name.givenName;
+            if (profileFromRequest.name.familyName && profileFromRequest.name.familyName != '') {
+                name += " " + profileFromRequest.name.familyName;
+            }
             
             var ubNetworkToMessage = jsonBody.networkNumbers;
             console.log(ubNetworkToMessage);
@@ -73,15 +109,7 @@ exports.handler = (event, context, callback) => {
             
             sendTextMessages(name, ubNetworkToMessage, base64Profile);
             
-            if (jsonBody && jsonBody.phoneNumbers && jsonBody.phoneNumbers != '' && jsonBody.phoneNumbers.length > 0) {
-                //sendTextMessages(jsonBody.phoneNumbers);
-                
-            }
-            
             done();
-            break;
-        case 'PUT':
-            
             break;
         default:
             done(new Error(`Unsupported method "${event.httpMethod}"`));
