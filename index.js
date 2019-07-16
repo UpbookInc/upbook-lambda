@@ -39,7 +39,7 @@ exports.handler = (event, context, callback) => {
             console.log("Sending text to: " + phoneNumbersToMessage[phoneNumIndex]);
             var updateMessage = ' sent you contact updates via UpBook! ';
             var textParams = {
-                Message: name + updateMessage + baseUrl + base64Profile,
+                Message: name + updateMessage + baseUrl + storeKey,
                 PhoneNumber: phoneNumbersToMessage[phoneNumIndex],
             };
             console.log(textParams);
