@@ -5,6 +5,7 @@ var AWS = require('aws-sdk');
 // Set region
 AWS.config.update({region: 'us-east-1'});
 const uuidv1 = require('uuid/v1');
+const uuidv3 = require('uuid/v3');
 const redis = require('redis');
 
 exports.handler = (event, context, callback) => {   
@@ -26,9 +27,12 @@ exports.handler = (event, context, callback) => {
     function sendTextMessages(name, phoneNumbersToMessage, base64Profile) {
         console.log("Phone numbers to message: " + phoneNumbersToMessage);
         
-        var uuid = uuidv1();
-        console.log("storing with key: " + uuid);
-        redis_client.set(uuid, base64Profile, 'EX', 86400); // expires in one day 
+        var uuid1 = uuidv1();
+        var uuid2 = uuidv3('fflsys.com', uuidv3.DNS);
+        var storeKey = uuid1 + uuid2;
+        storeKey = storeKey.replace(/-/g, ""); // remove dashes
+        console.log("storing with key: " + storeKey);
+        redis_client.set(storeKey, base64Profile, 'EX', 86400); // expires in one day 
         redis_client.quit(); //required for this to work!
                
         for (var phoneNumIndex = 0; phoneNumIndex < phoneNumbersToMessage.length; phoneNumIndex++) {
@@ -60,15 +64,16 @@ exports.handler = (event, context, callback) => {
         });
         
         redis_client.get(dataUuid, function(error, reply) {
-            console.log("redis get: " + reply);
-            if (!error) {
+            console.log("Profile data from redis get: " + reply);
+            if (!error && reply) {
                 console.log("profileDataCallback with reply");
                 redis_client.quit(); //required for this to work!
                 profileDataCallback(reply);
             } else {
+                console.log("Redis request error, or reply was empty:");
+                console.log("error:" + error);
                 done('Redis request errored.');
             }
-            
         });
     }
 
